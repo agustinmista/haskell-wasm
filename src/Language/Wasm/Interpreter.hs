@@ -1,3 +1,5 @@
+-- {-# OPTIONS_GHC -fplugin=Tracer #-}
+
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -250,7 +252,7 @@ makeHostModule st items = do
             in
             let st' = st { funcInstances = funcInstances st <> Vector.fromList instances } in
             (st', inst')
-        
+
         makeHostGlobals :: (Store, ModuleInstance) -> (Store, ModuleInstance)
         makeHostGlobals (st, inst) =
             let globLen = Vector.length $ globalInstances st in
@@ -263,7 +265,7 @@ makeHostModule st items = do
             in
             let st' = st { globalInstances = globalInstances st <> Vector.fromList instances } in
             (st', inst')
-            
+
         makeHostMems :: (Store, ModuleInstance) -> IO (Store, ModuleInstance)
         makeHostMems (st, inst) = do
             let memLen = Vector.length $ memInstances st
@@ -276,7 +278,7 @@ makeHostModule st items = do
                 }
             let st' = st { memInstances = memInstances st <> instances }
             return (st', inst')
-            
+
         makeHostTables :: (Store, ModuleInstance) -> IO (Store, ModuleInstance)
         makeHostTables (st, inst) = do
             let tableLen = Vector.length $ tableInstances st
@@ -390,7 +392,7 @@ calcInstance (Store fs ts ms gs) imps Module {functions, types, tables, mems, gl
             if limitMatch lim limit
             then return idx
             else throwError "incompatible import type"
-    
+
         limitMatch :: Limit -> Limit -> Bool
         limitMatch (Limit n1 m1) (Limit n2 m2) = n1 >= n2 && (isNothing m2 || fromMaybe False ((<=) <$> m1 <*> m2))
 
@@ -513,7 +515,7 @@ initialize inst Module {elems, datas, start} store = do
             len <- ByteArray.getSizeofMutableByteArray mem
             Monad.when (last > len) $ throwError "data segment does not fit"
             return (from, mem, chunk)
-        
+
         initData :: (Int, MemoryStore, LBS.ByteString) -> Initialize ()
         initData (from, mem, chunk) =
             mapM_ (\(i,b) -> ByteArray.writeByteArray mem i b) $ zip [from..] $ LBS.unpack chunk
@@ -588,7 +590,7 @@ eval budget store FunctionInstance { funcType, moduleInstance, code = Function {
             case res of
                 Done ctx' -> go ctx' rest
                 command -> return command
-        
+
         makeLoadInstr :: (Primitive.Prim i, Bits i, Integral i) => EvalCtx -> Natural -> Int -> ([Value] -> i -> EvalResult) -> IO EvalResult
         makeLoadInstr ctx@EvalCtx{ stack = (VI32 v:rest) } offset byteWidth cont = do
             let MemoryInstance { memory = memoryRef } = memInstances store ! (memaddrs moduleInstance ! 0)
@@ -672,7 +674,7 @@ eval budget store FunctionInstance { funcType, moduleInstance, code = Function {
                 Nothing -> return Trap
         step ctx (Call fun) = do
             let funInst = funcInstances store ! (funcaddrs moduleInstance ! fromIntegral fun)
-            let ft = Language.Wasm.Interpreter.funcType funInst 
+            let ft = Language.Wasm.Interpreter.funcType funInst
             let args = params ft
             case sequence $ zipWith checkValType args $ reverse $ take (length args) $ stack ctx of
                 Just params -> do

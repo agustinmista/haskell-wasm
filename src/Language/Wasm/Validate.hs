@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fplugin=Tracer #-}
+
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -182,7 +184,7 @@ isMemArgValid sizeInBytes MemArg { align } = if 2 ^ align <= sizeInBytes then re
 checkMemoryInstr :: Int -> MemArg -> Checker ()
 checkMemoryInstr size memarg = do
     isMemArgValid size memarg
-    Ctx { mems } <- ask 
+    Ctx { mems } <- ask
     if length mems < 1 then throwError MemoryIndexOutOfRange else return ()
 
 getInstrType :: Instruction Natural -> Checker Arrow
@@ -205,7 +207,10 @@ getInstrType If { resultType, true, false } = do
     l <- withLabel resultType $ getExpressionType true
     r <- withLabel resultType $ getExpressionType false
     if isArrowMatch l blockType
-    then (if isArrowMatch r blockType then (return $ I32 ==> resultType) else (throwError $ TypeMismatch r blockType))
+    -- then (if isArrowMatch r blockType
+    then (if isArrowMatch l blockType  -- BUG
+          then (return $ I32 ==> resultType)
+          else (throwError $ TypeMismatch r blockType))
     else throwError $ TypeMismatch l blockType
 getInstrType (Br lbl) = do
     r <- map Val . maybeToList <$> getLabel lbl
@@ -329,10 +334,10 @@ getInstrType (I64Store32 memarg) = do
     checkMemoryInstr 4 memarg
     return $ [I32, I64] ==> empty
 getInstrType CurrentMemory = do
-    Ctx { mems } <- ask 
+    Ctx { mems } <- ask
     if length mems < 1 then throwError MemoryIndexOutOfRange else return $ empty ==> I32
 getInstrType GrowMemory = do
-    Ctx { mems } <- ask 
+    Ctx { mems } <- ask
     if length mems < 1 then throwError MemoryIndexOutOfRange else return $ I32 ==> I32
 getInstrType (I32Const _) = return $ empty ==> I32
 getInstrType (I64Const _) = return $ empty ==> I64
@@ -390,7 +395,7 @@ getExpressionType = fmap ([] `Arrow`) . foldM go []
         go stack instr = do
             (f `Arrow` t) <- getInstrType instr
             matchStack stack (reverse f) t
-        
+
         matchStack :: [VType] -> [VType] -> [VType] -> Checker [VType]
         matchStack stack@(Any:_) _arg res = return $ res ++ stack
         matchStack (Val v:stack) (Val v':args) res =
@@ -402,6 +407,7 @@ getExpressionType = fmap ([] `Arrow`) . foldM go []
             let subst = replace Var (Val v) in
             matchStack stack (subst args) (subst res)
         matchStack stack [] res = return $ res ++ stack
+        -- matchStack stack [] res = return $ stack -- BUG
         matchStack [] args res = throwError $ TypeMismatch ((reverse args) `Arrow` res) ([] `Arrow` [])
         matchStack _ _ _ = error "inconsistent checker state"
 
@@ -468,6 +474,7 @@ isFunctionValid Function {funcType, localTypes = locals, body} mod@Module {types
             arr <- runChecker ctx $ getExpressionType body
             if isArrowMatch arr (empty ==> results)
             then return ()
+            -- else return () -- BUG
             else Left $ TypeMismatch arr (empty ==> results)
     else Left TypeIndexOutOfRange
 
@@ -533,7 +540,7 @@ elemsShouldBeValid m@Module { elems, functions, tables, imports } =
                     t <- getExpressionType offset
                     if isArrowMatch (empty ==> I32) t
                     then return ()
-                    else throwError $ TypeMismatch t (empty ==> I32) 
+                    else throwError $ TypeMismatch t (empty ==> I32)
             in
             let tableImports = filter isTableImport imports in
             let isTableIndexValid =
@@ -558,7 +565,7 @@ datasShouldBeValid m@Module { datas, mems, imports } =
                     t <- getExpressionType offset
                     if isArrowMatch (empty ==> I32) t
                     then return ()
-                    else throwError $ TypeMismatch t (empty ==> I32) 
+                    else throwError $ TypeMismatch t (empty ==> I32)
             in
             let memImports = filter isMemImport imports in
             if memIdx < (fromIntegral $ length memImports + length mems)
