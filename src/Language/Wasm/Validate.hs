@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fplugin=Tracer #-}
+-- {-# OPTIONS_GHC -fplugin=Tracer #-}
 
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE DuplicateRecordFields #-}
